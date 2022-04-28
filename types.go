@@ -1,7 +1,15 @@
 package swag
 
 import (
+	"errors"
+	"fmt"
 	"go/ast"
+	goparser "go/parser"
+	"go/token"
+	"io/ioutil"
+	"log"
+	"path/filepath"
+	"strings"
 
 	"github.com/go-openapi/spec"
 )
@@ -59,11 +67,111 @@ type AstFileInfo struct {
 // PackageDefinitions files and definition in a package.
 type PackageDefinitions struct {
 	// files in this package, map key is file's relative path starting package path
-	Files map[string]*ast.File
+	files     []*ast.File
+	filenames []string
 
 	// definitions in this package, map key is typeName
 	TypeDefinitions map[string]*TypeSpecDef
 
 	// package name
-	Name string
+	ImportName string
+	ImportPath string
+
+	// package dir
+	Dir string
+}
+
+func newPackageDefinitions(importName, importPath, packageDir string) (*PackageDefinitions, error) {
+	if packageDir == "" {
+		log.Println("load package -", importPath)
+
+		return &PackageDefinitions{
+			TypeDefinitions: make(map[string]*TypeSpecDef),
+			ImportName: importName,
+			ImportPath: importPath,
+			Dir:        packageDir,
+		}, nil
+	}
+	fis, err := ioutil.ReadDir(packageDir)
+	if err != nil {
+		return nil, err
+	}
+
+	var filenames []string
+	for _, fi := range fis {
+		if ext := filepath.Ext(fi.Name()); strings.ToLower(ext) != ".go" {
+			continue
+		}
+		if strings.HasSuffix(fi.Name(), "_test.go") {
+			continue
+		}
+		if strings.HasSuffix(fi.Name(), "-gen.go") {
+			continue
+		}
+
+		filenames = append(filenames, fi.Name())
+	}
+
+	packageDir = strings.TrimSuffix(packageDir, "/")
+	packageDir = strings.TrimSuffix(packageDir, "\\")
+
+	log.Println("load package -", packageDir, filenames)
+
+	return &PackageDefinitions{
+		// files in this package, map key is file's relative path starting package path
+		files:           make([]*ast.File, len(filenames)),
+		filenames:       filenames,
+		TypeDefinitions: make(map[string]*TypeSpecDef),
+		ImportName: importName,
+		ImportPath: importPath,
+		Dir:        packageDir,
+	}, nil
+}
+
+func (pd *PackageDefinitions) mustAdd(filename string, file *ast.File) {
+	simplefilename := strings.TrimLeft(strings.TrimPrefix(filename, pd.Dir), "/\\")
+
+	for idx, name := range pd.filenames {
+		if simplefilename == name {
+			pd.files[idx] = file
+			return
+		}
+	}
+
+	println("**********", pd.Dir)
+	for _, name := range pd.filenames {
+		println(name)
+	}
+	panic(errors.New(filename + " isnot exist in the " + pd.Dir))
+}
+
+func (pd *PackageDefinitions) findFile(filename string) *ast.File {
+	simplefilename := strings.TrimLeft(strings.TrimPrefix(filename, pd.Dir), "/\\")
+
+	for idx, name := range pd.filenames {
+		if simplefilename == name {
+			return pd.files[idx]
+		}
+	}
+	return nil
+}
+
+func (pd *PackageDefinitions) fileCount() int {
+	return len(pd.filenames)
+}
+
+func (pd *PackageDefinitions) loadFileByIndex(idx int) (*ast.File, bool, error) {
+	if pd.files[idx] != nil {
+		return pd.files[idx], false, nil
+	}
+
+	filename := filepath.Join(pd.Dir, pd.filenames[idx])
+
+	fileTree, err := goparser.ParseFile(token.NewFileSet(), filename, nil, goparser.ParseComments)
+	if err != nil {
+		return nil, false, fmt.Errorf("cannot parse source files %s: %s", filename, err)
+	}
+
+	pd.files[idx] = fileTree
+	return fileTree, true, nil
 }

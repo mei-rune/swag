@@ -75,13 +75,13 @@ func TransToValidSchemeType(typeName string) string {
 		return INTEGER
 	case "uint32", "int32", "rune":
 		return INTEGER
-	case "uint64", "int64":
+	case "uint64", "int64", "sql.NullInt64", "sql.NullInt32":
 		return INTEGER
-	case "float32", "float64":
+	case "float32", "float64", "sql.NullFloat64":
 		return NUMBER
-	case "bool":
+	case "bool", "sql.NullBool" :
 		return BOOLEAN
-	case "string":
+	case "string", "sql.NullString", "sql.NullTime", "time.Time", "time.Duration", "net.IP", "net.HardwareAddr":
 		return STRING
 	}
 
@@ -107,7 +107,17 @@ func IsGolangPrimitiveType(typeName string) bool {
 		"float64",
 		"bool",
 		"string",
-		"any":
+		"any",
+		"sql.NullString",
+		"sql.NullBool",
+		"sql.NullInt64",
+		"sql.NullInt32",
+		"sql.NullFloat64",
+		"sql.NullTime",
+		"time.Time",
+		"time.Duration",
+		"net.IP",
+		"net.HardwareAddr":
 		return true
 	}
 
@@ -147,6 +157,10 @@ func TypeDocName(pkgName string, spec *ast.TypeSpec) string {
 // RefSchema build a reference schema.
 func RefSchema(refType string) *spec.Schema {
 	return spec.RefSchema("#/definitions/" + refType)
+}
+
+func GetRefTypeFromRefSchema(schema *spec.Schema) string {
+	return strings.TrimPrefix(schema.Ref.GetURL().String(), "#/definitions/")
 }
 
 // PrimitiveSchema build a primitive schema.
