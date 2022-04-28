@@ -286,89 +286,11 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 				return err
 			}
 
-			params, err := operation.collectParametersForObject(param, schema)
+			params, err := operation.collectParametersForObject(param, schema, param.Name + ".")
 			if err != nil {
 				return err
 			}
 			operation.Operation.Parameters = append(operation.Operation.Parameters, params...)
-
-			// current spec.Parameter, schema Schema) ([]spec.Parameter, error) {
-
-			// prefix := name
-			// structargname := name
-			// if s, _ := param.Extensions.GetString("x-gogen-extend"); s == "inline" {
-			// 	prefix = ""
-			// } else if s, _ := param.Extensions.GetString("x-gogen-prefix"); s != "" {
-			// 	prefix = s
-			// } else {
-			// 	prefix = prefix + "."
-			// }
-
-			// // fmt.Println("==========", operation.ID, prefix, description)
-			// // for key, value := range param.Extensions {
-			// // 	fmt.Println("==", key, value)
-			// // }
-
-			// items := schema.Properties.ToOrderedSchemaItems()
-			// for _, item := range items {
-			// 	fmt.Println(item.Name)
-
-			// 	name := prefix + item.Name
-			// 	prop := item.Schema
-			// 	if len(prop.Type) == 0 {
-			// 		continue
-			// 	}
-			// 	switch {
-			// 	case prop.Type[0] == ARRAY &&
-			// 		prop.Items.Schema != nil &&
-			// 		len(prop.Items.Schema.Type) > 0 &&
-			// 		IsSimplePrimitiveType(prop.Items.Schema.Type[0]):
-			// 		param = createParameter(paramType, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
-			// 		param.SimpleSchema.Type = prop.Type[0]
-			// 		if operation.parser != nil && operation.parser.collectionFormatInQuery != "" && param.CollectionFormat == "" {
-			// 			param.CollectionFormat = TransToValidCollectionFormat(operation.parser.collectionFormatInQuery)
-			// 		}
-			// 		param.SimpleSchema.Items = &spec.Items{
-			// 			SimpleSchema: spec.SimpleSchema{
-			// 				Type: prop.Items.Schema.Type[0],
-			// 			},
-			// 		}
-			// 	case IsSimplePrimitiveType(prop.Type[0]):
-			// 		param = createParameter(paramType, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
-			// 	default:
-
-			// 		operation.parser.debug.Printf("skip field [%s] in %s is not supported type for %s", param.Name, refType, paramType)
-			// 		continue
-			// 	}
-			// 	param.Nullable = prop.Nullable
-			// 	param.Format = prop.Format
-			// 	param.Default = prop.Default
-			// 	param.Example = prop.Example
-			// 	param.Extensions = prop.Extensions
-			// 	param.CommonValidations.Maximum = prop.Maximum
-			// 	param.CommonValidations.Minimum = prop.Minimum
-			// 	param.CommonValidations.ExclusiveMaximum = prop.ExclusiveMaximum
-			// 	param.CommonValidations.ExclusiveMinimum = prop.ExclusiveMinimum
-			// 	param.CommonValidations.MaxLength = prop.MaxLength
-			// 	param.CommonValidations.MinLength = prop.MinLength
-			// 	param.CommonValidations.Pattern = prop.Pattern
-			// 	param.CommonValidations.MaxItems = prop.MaxItems
-			// 	param.CommonValidations.MinItems = prop.MinItems
-			// 	param.CommonValidations.UniqueItems = prop.UniqueItems
-			// 	param.CommonValidations.MultipleOf = prop.MultipleOf
-			// 	param.CommonValidations.Enum = prop.Enum
-
-			// 	if param.Extensions == nil {
-			// 		param.Extensions = make(map[string]interface{})
-			// 	}
-			// 	if prefix != "" {
-			// 		param.Extensions.Add("x-gogen-extend-prefix", prefix)
-			// 	}
-			// 	param.Extensions.Add("x-gogen-extend-struct", structargname)
-			// 	param.Extensions.Add("x-gogen-extend-field", item.Name)
-			//  operation.Operation.Parameters = append(operation.Operation.Parameters, param)
-			//}
-
 			return nil
 		}
 	case "body":
@@ -394,7 +316,7 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 	return nil
 }
 
-func (operation *Operation) collectParametersForObject(current spec.Parameter, schema *spec.Schema) ([]spec.Parameter, error) {
+func (operation *Operation) collectParametersForObject(current spec.Parameter, schema *spec.Schema, prefix string) ([]spec.Parameter, error) {
 	if operation.parser.GoGenEnabled {
 		if operation.Extensions == nil {
 			operation.Extensions = spec.Extensions{}
@@ -406,14 +328,11 @@ func (operation *Operation) collectParametersForObject(current spec.Parameter, s
 
 	var results []spec.Parameter
 
-	prefix := current.Name
 	structargname := current.Name
 	if s, _ := current.Extensions.GetString("x-gogen-extend"); s == "inline" {
 		prefix = ""
 	} else if s, _ := current.Extensions.GetString("x-gogen-prefix"); s != "" {
 		prefix = s
-	} else {
-		prefix = prefix + "."
 	}
 
 	items := schema.Properties.ToOrderedSchemaItems()
@@ -443,7 +362,7 @@ func (operation *Operation) collectParametersForObject(current spec.Parameter, s
 				}
 				subparam.Extensions.Add("x-gogen-prefix", name + ".")
 			}
-			params, err := operation.collectParametersForObject(subparam, &referedSchema)
+			params, err := operation.collectParametersForObject(subparam, &referedSchema, name + ".")
 			if err != nil {
 				return nil, err
 			}

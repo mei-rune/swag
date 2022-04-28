@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/format"
 	"go/build"
 	goparser "go/parser"
 	"go/token"
@@ -721,12 +722,26 @@ func getSchemes(commentLine string) []string {
 	return strings.Split(strings.TrimSpace(commentLine[len(attribute):]), " ")
 }
 
+func astNodeToString(typ ast.Node) string {
+	fset := token.NewFileSet()
+	var buf strings.Builder
+	if err := format.Node(&buf, fset, typ); err != nil {
+		panic(err)
+		// log.Fatalln(err)
+	}
+	return buf.String()
+}
+
 // ParseRouterAPIInfo parses router api info for given astFile.
 func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) error {
 	for _, astDescription := range astFile.Decls {
 		astDeclaration, ok := astDescription.(*ast.FuncDecl)
-		if ok && astDeclaration.Doc != nil && astDeclaration.Doc.List != nil {			
-			err := parser.ParseRouterAPIFuncInfo(fileName, astFile, astDeclaration.Doc)
+		if ok && astDeclaration.Doc != nil && astDeclaration.Doc.List != nil {
+
+			id := strings.TrimPrefix(astNodeToString(astDeclaration.Recv.List[0].Type), "*") + 
+					"." + astDeclaration.Name.Name
+
+			err := parser.ParseRouterAPIFuncInfo(fileName, astFile, id, astDeclaration.Doc)
 			if err != nil {
 				return err
 			}
@@ -756,7 +771,8 @@ func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) err
 					}
 
 					if field.Doc != nil && field.Doc.List != nil {
-						err := parser.ParseRouterAPIFuncInfo(fileName, astFile, field.Doc)
+						id := ts.Name.Name + "." + field.Names[0].Name
+						err := parser.ParseRouterAPIFuncInfo(fileName, astFile, id, field.Doc)
 						if err != nil {
 							return err
 						}
@@ -770,44 +786,45 @@ func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) err
 }
 
 
-
 // ParseRouterAPIFuncInfo parses router api func info for given astFile.
-func (parser *Parser) ParseRouterAPIFuncInfo(fileName string, astFile *ast.File, doc *ast.CommentGroup) error {
+func (parser *Parser) ParseRouterAPIFuncInfo(fileName string, astFile *ast.File, defaultID string, doc *ast.CommentGroup) error {
+	// for per 'function' comment, create a new 'Operation' object
+	operation := NewOperation(parser, SetCodeExampleFilesDirectory(parser.codeExampleFilesDir))
+	for _, comment := range doc.List {
+		err := operation.ParseComment(comment.Text, astFile)
+		if err != nil {
+			return fmt.Errorf("ParseComment error in file %s :%+v", fileName, err)
+		}
+	}
 
+	if operation.ID == "" {
+		operation.ID = defaultID
+	}
 
-			// for per 'function' comment, create a new 'Operation' object
-			operation := NewOperation(parser, SetCodeExampleFilesDirectory(parser.codeExampleFilesDir))
-			for _, comment := range doc.List {
-				err := operation.ParseComment(comment.Text, astFile)
-				if err != nil {
-					return fmt.Errorf("ParseComment error in file %s :%+v", fileName, err)
-				}
+	for _, routeProperties := range operation.RouterProperties {
+		var pathItem spec.PathItem
+		var ok bool
+
+		pathItem, ok = parser.swagger.Paths.Paths[routeProperties.Path]
+		if !ok {
+			pathItem = spec.PathItem{}
+		}
+
+		op := refRouteMethodOp(&pathItem, routeProperties.HTTPMethod)
+
+		// check if we already have a operation for this path and method
+		if *op != nil {
+			err := fmt.Errorf("route %s %s is declared multiple times", routeProperties.HTTPMethod, routeProperties.Path)
+			if parser.Strict {
+				return err
 			}
+			parser.debug.Printf("warning: %s\n", err)
+		}
 
-			for _, routeProperties := range operation.RouterProperties {
-				var pathItem spec.PathItem
-				var ok bool
+		*op = &operation.Operation
 
-				pathItem, ok = parser.swagger.Paths.Paths[routeProperties.Path]
-				if !ok {
-					pathItem = spec.PathItem{}
-				}
-
-				op := refRouteMethodOp(&pathItem, routeProperties.HTTPMethod)
-
-				// check if we already have a operation for this path and method
-				if *op != nil {
-					err := fmt.Errorf("route %s %s is declared multiple times", routeProperties.HTTPMethod, routeProperties.Path)
-					if parser.Strict {
-						return err
-					}
-					parser.debug.Printf("warning: %s\n", err)
-				}
-
-				*op = &operation.Operation
-
-				parser.swagger.Paths.Paths[routeProperties.Path] = pathItem
-			}
+		parser.swagger.Paths.Paths[routeProperties.Path] = pathItem
+	}
 	return nil
 }
 
