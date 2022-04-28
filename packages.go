@@ -230,6 +230,8 @@ func (pkgs *PackagesDefinitions) findPackagePathFromImports(pkg string, file *as
 			continue
 		}
 		if pkgs.packages != nil {
+
+
 			path := strings.Trim(imp.Path.Value, `"`)
 			if fuzzy {
 				if matchLastPathPart(path) {

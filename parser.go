@@ -117,6 +117,8 @@ type Parser struct {
 	// Strict whether swag should error or warn when it detects cases which are most likely user errors
 	Strict bool
 
+	GoGenEnabled bool
+
 	// structStack stores full names of the structures that were already parsed or are being parsed now
 	structStack []*TypeSpecDef
 
@@ -255,6 +257,10 @@ func SetOverrides(overrides map[string]string) func(parser *Parser) {
 			p.Overrides[k] = v
 		}
 	}
+}
+
+func (parser *Parser) Packages() *PackagesDefinitions {
+	return parser.packages
 }
 
 // ParseAPI parses general api info for given searchDir and mainAPIFile.
@@ -719,10 +725,59 @@ func getSchemes(commentLine string) []string {
 func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) error {
 	for _, astDescription := range astFile.Decls {
 		astDeclaration, ok := astDescription.(*ast.FuncDecl)
-		if ok && astDeclaration.Doc != nil && astDeclaration.Doc.List != nil {
+		if ok && astDeclaration.Doc != nil && astDeclaration.Doc.List != nil {			
+			err := parser.ParseRouterAPIFuncInfo(fileName, astFile, astDeclaration.Doc)
+			if err != nil {
+				return err
+			}
+		}
+
+		genDeclaration, ok := astDescription.(*ast.GenDecl)
+		if ok && genDeclaration.Tok == token.TYPE {
+			for _, spec := range genDeclaration.Specs {
+				ts, ok := spec.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+
+				interfaceType, ok := ts.Type.(*ast.InterfaceType)
+				if !ok {
+					continue
+				}
+
+				for _, field := range interfaceType.Methods.List {
+					if field.Type == nil {
+						continue
+					}
+
+					_, ok := field.Type.(*ast.FuncType)
+					if !ok {
+						continue
+					}
+
+					if field.Doc != nil && field.Doc.List != nil {
+						err := parser.ParseRouterAPIFuncInfo(fileName, astFile, field.Doc)
+						if err != nil {
+							return err
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+
+
+// ParseRouterAPIFuncInfo parses router api func info for given astFile.
+func (parser *Parser) ParseRouterAPIFuncInfo(fileName string, astFile *ast.File, doc *ast.CommentGroup) error {
+
+
 			// for per 'function' comment, create a new 'Operation' object
 			operation := NewOperation(parser, SetCodeExampleFilesDirectory(parser.codeExampleFilesDir))
-			for _, comment := range astDeclaration.Doc.List {
+			for _, comment := range doc.List {
 				err := operation.ParseComment(comment.Text, astFile)
 				if err != nil {
 					return fmt.Errorf("ParseComment error in file %s :%+v", fileName, err)
@@ -753,9 +808,6 @@ func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) err
 
 				parser.swagger.Paths.Paths[routeProperties.Path] = pathItem
 			}
-		}
-	}
-
 	return nil
 }
 
@@ -785,7 +837,7 @@ func convertFromSpecificToPrimitive(typeName string) (string, error) {
 		name = strings.Split(name, ".")[1]
 	}
 	switch strings.ToUpper(name) {
-	case "TIME", "OBJECTID", "UUID":
+	case "TIME", "OBJECTID", "UUID", "IP", "HardwareAddr":
 		return STRING, nil
 	case "DECIMAL":
 		return NUMBER, nil
@@ -806,6 +858,7 @@ func (parser *Parser) getTypeSchema(typeName string, file *ast.File, ref bool) (
 
 	typeSpecDef := parser.packages.FindTypeSpec(typeName, file, parser.ParseDependency)
 	if typeSpecDef == nil {
+		panic("===="+typeName)
 		return nil, fmt.Errorf("cannot find type definition: %s", typeName)
 	}
 
@@ -1046,6 +1099,9 @@ func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool)
 
 	// type Foo Baz
 	case *ast.Ident:
+		if expr.Name == "url.Values" {
+			return spec.MapProperty(nil), nil
+		}
 		return parser.getTypeSchema(expr.Name, file, ref)
 
 	// type Foo *Baz
@@ -1091,20 +1147,41 @@ func (parser *Parser) parseStruct(file *ast.File, fields *ast.FieldList) (*spec.
 	required := make([]string, 0)
 	properties := make(map[string]spec.Schema)
 	for _, field := range fields.List {
-		fieldProps, requiredFromAnon, err := parser.parseStructField(file, field)
-		if err != nil {
-			if err == ErrFuncTypeField || err == ErrSkippedField {
+		if len(field.Names) == 0 {
+			fieldProps, requiredFromAnon, err := parser.parseStructEmbededField(file, field)
+			if err != nil {
+				if err == ErrFuncTypeField || err == ErrSkippedField {
+					continue
+				}
+				return nil, err
+			}
+			if len(fieldProps) == 0 {
 				continue
 			}
-
-			return nil, err
-		}
-		if len(fieldProps) == 0 {
+			required = append(required, requiredFromAnon...)
+			for k, v := range fieldProps {
+				properties[k] = v
+			}
 			continue
 		}
-		required = append(required, requiredFromAnon...)
-		for k, v := range fieldProps {
-			properties[k] = v
+		for idx := range field.Names {
+			singlefield := *field
+			singlefield.Names = singlefield.Names[idx:idx+1]
+			fieldProps, requiredFromAnon, err := parser.parseStructSingleField(file, &singlefield)
+			if err != nil {
+
+				if err == ErrFuncTypeField || err == ErrSkippedField {
+					continue
+				}
+				return nil, err
+			}
+			if len(fieldProps) == 0 {
+				continue
+			}
+			required = append(required, requiredFromAnon...)
+			for k, v := range fieldProps {
+				properties[k] = v
+			}
 		}
 	}
 
@@ -1119,10 +1196,9 @@ func (parser *Parser) parseStruct(file *ast.File, fields *ast.FieldList) (*spec.
 	}, nil
 }
 
-func (parser *Parser) parseStructField(file *ast.File, field *ast.Field) (map[string]spec.Schema, []string, error) {
-	if field.Names == nil {
+func (parser *Parser) parseStructEmbededField(file *ast.File, field *ast.Field) (map[string]spec.Schema, []string, error) {
 		if field.Tag != nil {
-			skip, ok := reflect.StructTag(strings.ReplaceAll(field.Tag.Value, "`", "")).Lookup("swaggerignore")
+			skip, ok := reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Lookup("swaggerignore")
 			if ok && strings.EqualFold(skip, "true") {
 				return nil, nil, nil
 			}
@@ -1132,6 +1208,15 @@ func (parser *Parser) parseStructField(file *ast.File, field *ast.Field) (map[st
 		if err != nil {
 			return nil, nil, err
 		}
+
+		if typeName == "map[string]string" || 
+			typeName == "url.Values" {
+			schema := spec.MapProperty(nil)
+			return map[string]spec.Schema{
+				typeName: *schema,
+			}, nil, nil
+		}
+
 		schema, err := parser.getTypeSchema(typeName, file, false)
 		if err != nil {
 			return nil, nil, err
@@ -1151,8 +1236,9 @@ func (parser *Parser) parseStructField(file *ast.File, field *ast.Field) (map[st
 
 		// for alias type of non-struct types ,such as array,map, etc. ignore field tag.
 		return map[string]spec.Schema{typeName: *schema}, nil, nil
-	}
+}
 
+func (parser *Parser) parseStructSingleField(file *ast.File, field *ast.Field) (map[string]spec.Schema, []string, error) {
 	ps := parser.fieldParserFactory(parser, field)
 
 	ok, err := ps.ShouldSkip()
@@ -1167,6 +1253,7 @@ func (parser *Parser) parseStructField(file *ast.File, field *ast.Field) (map[st
 	if err != nil {
 		return nil, nil, err
 	}
+
 
 	schema, err := ps.CustomSchema()
 	if err != nil {
@@ -1199,7 +1286,6 @@ func (parser *Parser) parseStructField(file *ast.File, field *ast.Field) (map[st
 	if required {
 		tagRequired = append(tagRequired, fieldName)
 	}
-
 	return map[string]spec.Schema{fieldName: *schema}, tagRequired, nil
 }
 

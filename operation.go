@@ -37,6 +37,7 @@ var mimeTypeAliases = map[string]string{
 	"json":                  "application/json",
 	"xml":                   "text/xml",
 	"plain":                 "text/plain",
+	"plaintext":             "text/plain",
 	"html":                  "text/html",
 	"mpfd":                  "multipart/form-data",
 	"x-www-form-urlencoded": "application/x-www-form-urlencoded",
@@ -280,54 +281,93 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 				return nil
 			}
 
-			items := schema.Properties.ToOrderedSchemaItems()
-			for _, item := range items {
-				name := item.Name
-				prop := item.Schema
-				if len(prop.Type) == 0 {
-					continue
-				}
-				switch {
-				case prop.Type[0] == ARRAY &&
-					prop.Items.Schema != nil &&
-					len(prop.Items.Schema.Type) > 0 &&
-					IsSimplePrimitiveType(prop.Items.Schema.Type[0]):
-					param = createParameter(paramType, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
-					param.SimpleSchema.Type = prop.Type[0]
-					if operation.parser != nil && operation.parser.collectionFormatInQuery != "" && param.CollectionFormat == "" {
-						param.CollectionFormat = TransToValidCollectionFormat(operation.parser.collectionFormatInQuery)
-					}
-					param.SimpleSchema.Items = &spec.Items{
-						SimpleSchema: spec.SimpleSchema{
-							Type: prop.Items.Schema.Type[0],
-						},
-					}
-				case IsSimplePrimitiveType(prop.Type[0]):
-					param = createParameter(paramType, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
-				default:
-					operation.parser.debug.Printf("skip field [%s] in %s is not supported type for %s", name, refType, paramType)
-
-					continue
-				}
-				param.Nullable = prop.Nullable
-				param.Format = prop.Format
-				param.Default = prop.Default
-				param.Example = prop.Example
-				param.Extensions = prop.Extensions
-				param.CommonValidations.Maximum = prop.Maximum
-				param.CommonValidations.Minimum = prop.Minimum
-				param.CommonValidations.ExclusiveMaximum = prop.ExclusiveMaximum
-				param.CommonValidations.ExclusiveMinimum = prop.ExclusiveMinimum
-				param.CommonValidations.MaxLength = prop.MaxLength
-				param.CommonValidations.MinLength = prop.MinLength
-				param.CommonValidations.Pattern = prop.Pattern
-				param.CommonValidations.MaxItems = prop.MaxItems
-				param.CommonValidations.MinItems = prop.MinItems
-				param.CommonValidations.UniqueItems = prop.UniqueItems
-				param.CommonValidations.MultipleOf = prop.MultipleOf
-				param.CommonValidations.Enum = prop.Enum
-				operation.Operation.Parameters = append(operation.Operation.Parameters, param)
+			err = operation.parseAndExtractionParamAttribute(commentLine, objectType, refType, &param)
+			if err != nil {
+				return err
 			}
+
+			params, err := operation.collectParametersForObject(param, schema)
+			if err != nil {
+				return err
+			}
+			operation.Operation.Parameters = append(operation.Operation.Parameters, params...)
+
+			// current spec.Parameter, schema Schema) ([]spec.Parameter, error) {
+
+			// prefix := name
+			// structargname := name
+			// if s, _ := param.Extensions.GetString("x-gogen-extend"); s == "inline" {
+			// 	prefix = ""
+			// } else if s, _ := param.Extensions.GetString("x-gogen-prefix"); s != "" {
+			// 	prefix = s
+			// } else {
+			// 	prefix = prefix + "."
+			// }
+
+			// // fmt.Println("==========", operation.ID, prefix, description)
+			// // for key, value := range param.Extensions {
+			// // 	fmt.Println("==", key, value)
+			// // }
+
+			// items := schema.Properties.ToOrderedSchemaItems()
+			// for _, item := range items {
+			// 	fmt.Println(item.Name)
+
+			// 	name := prefix + item.Name
+			// 	prop := item.Schema
+			// 	if len(prop.Type) == 0 {
+			// 		continue
+			// 	}
+			// 	switch {
+			// 	case prop.Type[0] == ARRAY &&
+			// 		prop.Items.Schema != nil &&
+			// 		len(prop.Items.Schema.Type) > 0 &&
+			// 		IsSimplePrimitiveType(prop.Items.Schema.Type[0]):
+			// 		param = createParameter(paramType, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
+			// 		param.SimpleSchema.Type = prop.Type[0]
+			// 		if operation.parser != nil && operation.parser.collectionFormatInQuery != "" && param.CollectionFormat == "" {
+			// 			param.CollectionFormat = TransToValidCollectionFormat(operation.parser.collectionFormatInQuery)
+			// 		}
+			// 		param.SimpleSchema.Items = &spec.Items{
+			// 			SimpleSchema: spec.SimpleSchema{
+			// 				Type: prop.Items.Schema.Type[0],
+			// 			},
+			// 		}
+			// 	case IsSimplePrimitiveType(prop.Type[0]):
+			// 		param = createParameter(paramType, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
+			// 	default:
+
+			// 		operation.parser.debug.Printf("skip field [%s] in %s is not supported type for %s", param.Name, refType, paramType)
+			// 		continue
+			// 	}
+			// 	param.Nullable = prop.Nullable
+			// 	param.Format = prop.Format
+			// 	param.Default = prop.Default
+			// 	param.Example = prop.Example
+			// 	param.Extensions = prop.Extensions
+			// 	param.CommonValidations.Maximum = prop.Maximum
+			// 	param.CommonValidations.Minimum = prop.Minimum
+			// 	param.CommonValidations.ExclusiveMaximum = prop.ExclusiveMaximum
+			// 	param.CommonValidations.ExclusiveMinimum = prop.ExclusiveMinimum
+			// 	param.CommonValidations.MaxLength = prop.MaxLength
+			// 	param.CommonValidations.MinLength = prop.MinLength
+			// 	param.CommonValidations.Pattern = prop.Pattern
+			// 	param.CommonValidations.MaxItems = prop.MaxItems
+			// 	param.CommonValidations.MinItems = prop.MinItems
+			// 	param.CommonValidations.UniqueItems = prop.UniqueItems
+			// 	param.CommonValidations.MultipleOf = prop.MultipleOf
+			// 	param.CommonValidations.Enum = prop.Enum
+
+			// 	if param.Extensions == nil {
+			// 		param.Extensions = make(map[string]interface{})
+			// 	}
+			// 	if prefix != "" {
+			// 		param.Extensions.Add("x-gogen-extend-prefix", prefix)
+			// 	}
+			// 	param.Extensions.Add("x-gogen-extend-struct", structargname)
+			// 	param.Extensions.Add("x-gogen-extend-field", item.Name)
+			//  operation.Operation.Parameters = append(operation.Operation.Parameters, param)
+			//}
 
 			return nil
 		}
@@ -352,6 +392,121 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 	operation.Operation.Parameters = append(operation.Operation.Parameters, param)
 
 	return nil
+}
+
+func (operation *Operation) collectParametersForObject(current spec.Parameter, schema *spec.Schema) ([]spec.Parameter, error) {
+	if operation.parser.GoGenEnabled {
+		if operation.Extensions == nil {
+			operation.Extensions = spec.Extensions{}
+		}
+
+		operation.Extensions["x-gogen-param-"+current.Name] = current
+	}
+
+
+	var results []spec.Parameter
+
+	prefix := current.Name
+	structargname := current.Name
+	if s, _ := current.Extensions.GetString("x-gogen-extend"); s == "inline" {
+		prefix = ""
+	} else if s, _ := current.Extensions.GetString("x-gogen-prefix"); s != "" {
+		prefix = s
+	} else {
+		prefix = prefix + "."
+	}
+
+	items := schema.Properties.ToOrderedSchemaItems()
+	for _, item := range items {
+		name := prefix + item.Name
+		prop := item.Schema
+		if len(prop.Type) == 0 {
+			refType := GetRefTypeFromRefSchema(&prop)
+			if refType == "" {
+				operation.parser.debug.Printf("skip field [%s.%s] in %s is not supported type for %s", current.Name, item.Name, current.SimpleSchema.Type, current.In)
+				continue
+			}
+			referedSchema, ok := operation.parser.swagger.Definitions[refType]
+			if !ok {
+				operation.parser.debug.Printf("skip field [%s.%s] in %s is not supported type for %s", current.Name, item.Name, current.SimpleSchema.Type, current.In)
+				continue
+			}
+
+			subparam := createParameter(current.In, 
+				prop.Description, 
+				structargname +"."+ item.Name,
+				referedSchema.Type[0], 
+				false)
+			if operation.parser.GoGenEnabled {
+				if subparam.Extensions == nil {
+					subparam.Extensions = map[string]interface{}{}
+				}
+				subparam.Extensions.Add("x-gogen-prefix", name + ".")
+			}
+			params, err := operation.collectParametersForObject(subparam, &referedSchema)
+			if err != nil {
+				return nil, err
+			}
+			results = append(results, params...)
+			continue
+		}
+
+		var param spec.Parameter
+		switch {
+		case prop.Type[0] == ARRAY &&
+			prop.Items.Schema != nil &&
+			len(prop.Items.Schema.Type) > 0 &&
+			IsSimplePrimitiveType(prop.Items.Schema.Type[0]):
+			param = createParameter(current.In, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
+			param.SimpleSchema.Type = prop.Type[0]
+			if operation.parser != nil && operation.parser.collectionFormatInQuery != "" && param.CollectionFormat == "" {
+				param.CollectionFormat = TransToValidCollectionFormat(operation.parser.collectionFormatInQuery)
+			}
+			param.SimpleSchema.Items = &spec.Items{
+				SimpleSchema: spec.SimpleSchema{
+					Type: prop.Items.Schema.Type[0],
+				},
+			}
+		case IsSimplePrimitiveType(prop.Type[0]):
+			param = createParameter(current.In, prop.Description, name, prop.Type[0], findInSlice(schema.Required, name))
+		default:
+			operation.parser.debug.Printf("skip field [%s.%s] in %s is not supported type for %s", current.Name, item.Name, current.SimpleSchema.Type, current.In)
+			continue
+		}
+		param.Nullable = prop.Nullable
+		param.Format = prop.Format
+		param.Default = prop.Default
+		param.Example = prop.Example
+		param.Extensions = prop.Extensions
+		param.CommonValidations.Maximum = prop.Maximum
+		param.CommonValidations.Minimum = prop.Minimum
+		param.CommonValidations.ExclusiveMaximum = prop.ExclusiveMaximum
+		param.CommonValidations.ExclusiveMinimum = prop.ExclusiveMinimum
+		param.CommonValidations.MaxLength = prop.MaxLength
+		param.CommonValidations.MinLength = prop.MinLength
+		param.CommonValidations.Pattern = prop.Pattern
+		param.CommonValidations.MaxItems = prop.MaxItems
+		param.CommonValidations.MinItems = prop.MinItems
+		param.CommonValidations.UniqueItems = prop.UniqueItems
+		param.CommonValidations.MultipleOf = prop.MultipleOf
+		param.CommonValidations.Enum = prop.Enum
+
+		if operation.parser.GoGenEnabled {
+			if param.Extensions == nil {
+				param.Extensions = make(map[string]interface{})
+			}
+			if prefix != "" {
+				param.Extensions.Add("x-gogen-extend-prefix", prefix)
+			} else {
+				param.Extensions.Add("x-gogen-extend-prefix-empty", "true")
+			}
+			param.Extensions.Add("x-gogen-extend-struct", structargname)
+			param.Extensions.Add("x-gogen-extend-field", item.Name)
+		}
+		results = append(results, param)
+	}
+
+	return results, nil
 }
 
 const (
@@ -776,7 +931,7 @@ func (operation *Operation) parseObjectSchema(refType string, astFile *ast.File)
 			return nil, fmt.Errorf("invalid type: %s", refType)
 		}
 		refType = refType[idx+1:]
-		if refType == "interface{}" || refType == "any" {
+		if refType == "string" || refType == "interface{}" || refType == "any" {
 			return spec.MapProperty(nil), nil
 		}
 		schema, err := operation.parseObjectSchema(refType, astFile)
