@@ -231,7 +231,6 @@ func (pkgs *PackagesDefinitions) findPackagePathFromImports(pkg string, file *as
 		}
 		if pkgs.packages != nil {
 
-
 			path := strings.Trim(imp.Path.Value, `"`)
 			if fuzzy {
 				if matchLastPathPart(path) {
@@ -297,6 +296,7 @@ func (pkgs *PackagesDefinitions) FindTypeSpec(typeName string, file *ast.File, p
 				return typeDef
 			}
 		}
+
 		pkgPath := pkgs.findPackagePathFromImports(parts[0], file, false)
 		if len(pkgPath) == 0 {
 			// check if the current package

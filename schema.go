@@ -79,7 +79,7 @@ func TransToValidSchemeType(typeName string) string {
 		return NUMBER
 	case "bool", "sql.NullBool" :
 		return BOOLEAN
-	case "string", "sql.NullString", "sql.NullTime":
+	case "string", "sql.NullString", "sql.NullTime", "time.Time", "net.IP", "net.HardwareAddr":
 		return STRING
 	}
 
@@ -111,7 +111,10 @@ func IsGolangPrimitiveType(typeName string) bool {
 		"sql.NullInt64",
 		"sql.NullInt32",
 		"sql.NullFloat64",
-		"sql.NullTime":
+		"sql.NullTime",
+		"time.Time",
+		"net.IP",
+		"net.HardwareAddr":
 		return true
 	}
 

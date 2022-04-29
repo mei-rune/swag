@@ -273,6 +273,23 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 				return err
 			}
 		case OBJECT:
+			err := operation.parseAndExtractionParamAttribute(commentLine, objectType, refType, &param)
+			if err != nil {
+				return err
+			}
+
+			if refType == "map[string]string" || refType == "url.Values" {
+				if operation.parser.GoGenEnabled {
+					if operation.Extensions == nil {
+						operation.Extensions = spec.Extensions{}
+					}
+					operation.Extensions["x-gogen-param-"+param.Name] = param
+				}
+
+				operation.parser.debug.Printf("skip field [%s] in object is not supported type for %s", param.Name, param.In)
+				return nil
+			}
+
 			schema, err := operation.parser.getTypeSchema(refType, astFile, false)
 			if err != nil {
 				return err
@@ -281,10 +298,7 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 				return nil
 			}
 
-			err = operation.parseAndExtractionParamAttribute(commentLine, objectType, refType, &param)
-			if err != nil {
-				return err
-			}
+	
 
 			params, err := operation.collectParametersForObject(param, schema, param.Name + ".")
 			if err != nil {

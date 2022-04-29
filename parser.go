@@ -875,7 +875,6 @@ func (parser *Parser) getTypeSchema(typeName string, file *ast.File, ref bool) (
 
 	typeSpecDef := parser.packages.FindTypeSpec(typeName, file, parser.ParseDependency)
 	if typeSpecDef == nil {
-		panic("===="+typeName)
 		return nil, fmt.Errorf("cannot find type definition: %s", typeName)
 	}
 
