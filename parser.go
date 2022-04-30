@@ -738,9 +738,11 @@ func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) err
 		astDeclaration, ok := astDescription.(*ast.FuncDecl)
 		if ok && astDeclaration.Doc != nil && astDeclaration.Doc.List != nil {
 
-			id := strings.TrimPrefix(astNodeToString(astDeclaration.Recv.List[0].Type), "*") + 
+			id := astDeclaration.Name.Name
+			if astDeclaration.Recv != nil && len(astDeclaration.Recv.List) > 0 {
+				id = strings.TrimPrefix(astNodeToString(astDeclaration.Recv.List[0].Type), "*") + 
 					"." + astDeclaration.Name.Name
-
+			}
 			err := parser.ParseRouterAPIFuncInfo(fileName, astFile, id, astDeclaration.Doc)
 			if err != nil {
 				return err
