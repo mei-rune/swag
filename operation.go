@@ -295,10 +295,16 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 				return err
 			}
 			if len(schema.Properties) == 0 {
+				if operation.parser.GoGenEnabled {
+					if operation.Extensions == nil {
+						operation.Extensions = spec.Extensions{}
+					}
+
+					operation.Extensions["x-gogen-param-"+param.Name] = param
+				}
 				return nil
 			}
-
-	
+			
 
 			params, err := operation.collectParametersForObject(param, schema, param.Name + ".")
 			if err != nil {
@@ -723,7 +729,7 @@ func parseMimeTypeList(mimeTypeList string, typeList *[]string, format string) e
 	return nil
 }
 
-var routerPattern = regexp.MustCompile(`^(/[\w./\-{}+:$]*)[[:blank:]]+\[(\w+)]`)
+var routerPattern = regexp.MustCompile(`^(/[\w./\-{}+:$@]*)[[:blank:]]+\[(\w+)]`)
 
 // ParseRouterComment parses comment for given `router` comment string.
 func (operation *Operation) ParseRouterComment(commentLine string) error {
