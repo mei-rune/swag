@@ -1494,7 +1494,9 @@ func (parser *Parser) getAllGoFileInfoFromDeps(pkg *depth.Pkg) error {
 }
 
 func (parser *Parser) parseFile(packageDir, path string, src interface{}) error {
-	if strings.HasSuffix(strings.ToLower(path), "_test.go") || filepath.Ext(path) != ".go" {
+	if strings.HasSuffix(strings.ToLower(path), "_test.go") || 
+		strings.HasSuffix(strings.ToLower(path), "-gen.go")||
+		filepath.Ext(path) != ".go" {
 		return nil
 	}
 

@@ -206,6 +206,7 @@ func (pkgs *PackagesDefinitions) loadExternalPackage(importPath string) error {
 
 	conf := loader.Config{
 		ParserMode: goparser.ParseComments,
+		AllowErrors: true,
 		Cwd:        cwd,
 	}
 
