@@ -82,6 +82,16 @@ type PackageDefinitions struct {
 }
 
 func newPackageDefinitions(importName, importPath, packageDir string) (*PackageDefinitions, error) {
+	if packageDir == "" {
+		log.Println("load package -", importPath)
+
+		return &PackageDefinitions{
+			TypeDefinitions: make(map[string]*TypeSpecDef),
+			ImportName: importName,
+			ImportPath: importPath,
+			Dir:        packageDir,
+		}, nil
+	}
 	fis, err := ioutil.ReadDir(packageDir)
 	if err != nil {
 		return nil, err
