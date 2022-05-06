@@ -142,7 +142,11 @@ func (pkgs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePa
 
 
 					if pkgs.packages[typeSpecDef.PkgPath] == nil {
-						pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, filepath.Dir(filename))
+						dir := filepath.Dir(filename)
+						if filename == "" {
+							dir = ""
+						}
+						pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, dir)
 						if err != nil {
 							panic(err)
 						}
