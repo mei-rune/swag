@@ -30,7 +30,7 @@ func NewPackagesDefinitions() *PackagesDefinitions {
 }
 
 // CollectAstFile collect ast.file.
-func (pkgDefs *PackagesDefinitions) CollectAstFile(packageDir, path string, astFile *ast.File) error {
+func (pkgDefs *PackagesDefinitions) CollectAstFile(packageDir, filename string, astFile *ast.File) error {
 	if pkgDefs.files == nil {
 		pkgDefs.files = make(map[*ast.File]*AstFileInfo)
 	}
@@ -44,7 +44,7 @@ func (pkgDefs *PackagesDefinitions) CollectAstFile(packageDir, path string, astF
 		return nil
 	}
 
-	path, err := filepath.Abs(path)
+	filename, err := filepath.Abs(filename)
 	if err != nil {
 		return err
 	}
@@ -52,23 +52,25 @@ func (pkgDefs *PackagesDefinitions) CollectAstFile(packageDir, path string, astF
 	dependency, ok := pkgDefs.packages[packageDir]
 	if ok {
 		// return without storing the file if it already exists
-		_, exists := dependency.Files[path]
-		if exists {
+		exists := dependency.findFile(filename)
+		if exists != nil {
 			return nil
 		}
-
-		dependency.Files[path] = astFile
+		dependency.mustAdd(filename, astFile)
 	} else {
-		pkgDefs.packages[packageDir] = &PackageDefinitions{
-			Name:            astFile.Name.Name,
-			Files:           map[string]*ast.File{path: astFile},
-			TypeDefinitions: make(map[string]*TypeSpecDef),
+		dependency, err = newPackageDefinitions(astFile.Name.Name, 
+			packageDir, 
+			filepath.Dir(filename))
+		if err != nil {
+			return err
 		}
+		pkgDefs.packages[packageDir] = dependency
+		dependency.mustAdd(filename, astFile)
 	}
 
 	pkgDefs.files[astFile] = &AstFileInfo{
 		File:        astFile,
-		Path:        path,
+		Path:        filename,
 		PackagePath: packageDir,
 	}
 
@@ -106,13 +108,13 @@ func rangeFiles(files map[*ast.File]*AstFileInfo, handle func(filename string, f
 func (pkgDefs *PackagesDefinitions) ParseTypes() (map[*TypeSpecDef]*Schema, error) {
 	parsedSchemas := make(map[*TypeSpecDef]*Schema)
 	for astFile, info := range pkgDefs.files {
-		pkgDefs.parseTypesFromFile(astFile, info.PackagePath, parsedSchemas)
-		pkgDefs.parseFunctionScopedTypesFromFile(astFile, info.PackagePath, parsedSchemas)
+		pkgDefs.parseTypesFromFile(astFile, info.PackagePath, info.Path, parsedSchemas)
+		pkgDefs.parseFunctionScopedTypesFromFile(astFile, info.PackagePath, info.Path, parsedSchemas)
 	}
 	return parsedSchemas, nil
 }
 
-func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePath string, parsedSchemas map[*TypeSpecDef]*Schema) {
+func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePath, filename string, parsedSchemas map[*TypeSpecDef]*Schema) {
 	for _, astDeclaration := range astFile.Decls {
 		if generalDeclaration, ok := astDeclaration.(*ast.GenDecl); ok && generalDeclaration.Tok == token.TYPE {
 			for _, astSpec := range generalDeclaration.Specs {
@@ -149,10 +151,15 @@ func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packag
 					}
 
 					if pkgDefs.packages[typeSpecDef.PkgPath] == nil {
-						pkgDefs.packages[typeSpecDef.PkgPath] = &PackageDefinitions{
-							Name:            astFile.Name.Name,
-							TypeDefinitions: map[string]*TypeSpecDef{typeSpecDef.Name(): typeSpecDef},
+						pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, filepath.Dir(filename))
+						if err != nil {
+							panic(err)
 						}
+						if filename != "" {
+							pd.mustAdd(filename, astFile)
+						}
+						pd.TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
+						pkgDefs.packages[typeSpecDef.PkgPath] = pd
 					} else if _, ok = pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()]; !ok {
 						pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
 					}
@@ -162,7 +169,7 @@ func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packag
 	}
 }
 
-func (pkgDefs *PackagesDefinitions) parseFunctionScopedTypesFromFile(astFile *ast.File, packagePath string, parsedSchemas map[*TypeSpecDef]*Schema) {
+func (pkgDefs *PackagesDefinitions) parseFunctionScopedTypesFromFile(astFile *ast.File, packagePath, filename string, parsedSchemas map[*TypeSpecDef]*Schema) {
 	for _, astDeclaration := range astFile.Decls {
 		funcDeclaration, ok := astDeclaration.(*ast.FuncDecl)
 		if ok && funcDeclaration.Body != nil {
@@ -204,10 +211,15 @@ func (pkgDefs *PackagesDefinitions) parseFunctionScopedTypesFromFile(astFile *as
 								}
 
 								if pkgDefs.packages[typeSpecDef.PkgPath] == nil {
-									pkgDefs.packages[typeSpecDef.PkgPath] = &PackageDefinitions{
-										Name:            astFile.Name.Name,
-										TypeDefinitions: map[string]*TypeSpecDef{fullName: typeSpecDef},
+									pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, filepath.Dir(filename))
+									if err != nil {
+										panic(err)
 									}
+									if filename != "" {
+										pd.mustAdd(filename, astFile)
+									}
+									pd.TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
+									pkgDefs.packages[typeSpecDef.PkgPath] = pd
 								} else if _, ok = pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[fullName]; !ok {
 									pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[fullName] = typeSpecDef
 								}
@@ -232,6 +244,28 @@ func (pkgDefs *PackagesDefinitions) findTypeSpec(pkgPath string, typeName string
 		if ok {
 			return typeSpec
 		}
+
+		for idx := 0; idx < pd.fileCount(); idx++ {
+			file, newLoad, err := pd.loadFileByIndex(idx)
+			if err != nil {
+				panic(err)
+			}
+			if newLoad {
+				astFile := &AstFileInfo{
+					File:        file,
+					Path:        filepath.Join(pd.Dir, pd.filenames[idx]),
+					PackagePath: pkgPath,
+				}
+				pkgDefs.files[file] = astFile
+
+				pkgDefs.parseTypesFromFile(file, astFile.PackagePath, "", nil)
+			}
+		}
+
+		typeSpec, ok = pd.TypeDefinitions[typeName]
+		if ok {
+			return typeSpec
+		}
 	}
 
 	return nil
@@ -245,6 +279,7 @@ func (pkgDefs *PackagesDefinitions) loadExternalPackage(importPath string) error
 
 	conf := loader.Config{
 		ParserMode: goparser.ParseComments,
+		AllowErrors: true,
 		Cwd:        cwd,
 	}
 
@@ -258,7 +293,7 @@ func (pkgDefs *PackagesDefinitions) loadExternalPackage(importPath string) error
 	for _, info := range loaderProgram.AllPackages {
 		pkgPath := strings.TrimPrefix(info.Pkg.Path(), "vendor/")
 		for _, astFile := range info.Files {
-			pkgDefs.parseTypesFromFile(astFile, pkgPath, nil)
+			pkgDefs.parseTypesFromFile(astFile, pkgPath, "", nil)
 		}
 	}
 
@@ -300,19 +335,17 @@ func (pkgDefs *PackagesDefinitions) findPackagePathFromImports(pkg string, file 
 
 			continue
 		}
-
 		if pkgDefs.packages != nil {
 			path := strings.Trim(imp.Path.Value, `"`)
 			if fuzzy {
 				if matchLastPathPart(path) {
 					return path
 				}
-
 				continue
 			}
 
 			pd, ok := pkgDefs.packages[path]
-			if ok && pd.Name == pkg {
+			if ok && pd.ImportName == pkg {
 				return path
 			}
 		}
@@ -330,7 +363,7 @@ func (pkgDefs *PackagesDefinitions) findPackagePathFromImports(pkg string, file 
 					if matchLastPathPart(path) {
 						return path
 					}
-				} else if pd, ok := pkgDefs.packages[path]; ok && pd.Name == pkg {
+				} else if pd, ok := pkgDefs.packages[path]; ok && pd.ImportName == pkg {
 					return path
 				}
 			}

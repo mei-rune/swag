@@ -145,7 +145,7 @@ func TestPackagesDefinitions_parseFunctionScopedTypesFromFile(t *testing.T) {
 	}
 
 	parsedSchema := make(map[*TypeSpecDef]*Schema)
-	pd.parseFunctionScopedTypesFromFile(mainAST, "main", parsedSchema)
+	pd.parseFunctionScopedTypesFromFile(mainAST, "main", "xxx", parsedSchema)
 
 	assert.Len(t, parsedSchema, 1)
 
