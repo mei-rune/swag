@@ -30,8 +30,12 @@ const (
 	parseDepthFlag       = "parseDepth"
 	instanceNameFlag     = "instanceName"
 	overridesFileFlag    = "overridesFile"
+<<<<<<< HEAD
 	parseGoListFlag      = "parseGoList"
 	quietFlag            = "quiet"
+=======
+	gogenEnabledFlag    = "gogen"
+>>>>>>> v1.8.1_3
 )
 
 var initFlags = []cli.Flag{
@@ -82,6 +86,11 @@ var initFlags = []cli.Flag{
 		Name:    parseDependencyFlag,
 		Aliases: []string{"pd"},
 		Usage:   "Parse go files inside dependency folder, disabled by default",
+	},
+	&cli.BoolFlag{
+		Name:    gogenEnabledFlag,
+		// Aliases: []string{"gogen"},
+		Usage:   "enable gogen extension, disabled by default",
 	},
 	&cli.StringFlag{
 		Name:    markdownFilesFlag,
@@ -160,6 +169,7 @@ func initAction(ctx *cli.Context) error {
 		InstanceName:        ctx.String(instanceNameFlag),
 		OverridesFile:       ctx.String(overridesFileFlag),
 		ParseGoList:         ctx.Bool(parseGoListFlag),
+		GoGenEnabled:        ctx.Bool(gogenEnabledFlag),
 		Debugger:            logger,
 	})
 }
