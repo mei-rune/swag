@@ -30,12 +30,9 @@ const (
 	parseDepthFlag       = "parseDepth"
 	instanceNameFlag     = "instanceName"
 	overridesFileFlag    = "overridesFile"
-<<<<<<< HEAD
 	parseGoListFlag      = "parseGoList"
 	quietFlag            = "quiet"
-=======
-	gogenEnabledFlag    = "gogen"
->>>>>>> v1.8.1_3
+	gogenEnabledFlag     = "gogen"
 )
 
 var initFlags = []cli.Flag{

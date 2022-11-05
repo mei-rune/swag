@@ -283,16 +283,15 @@ func SetOverrides(overrides map[string]string) func(parser *Parser) {
 	}
 }
 
-<<<<<<< HEAD
 // ParseUsingGoList sets whether swag use go list to parse dependency
 func ParseUsingGoList(enabled bool) func(parser *Parser) {
 	return func(p *Parser) {
 		p.parseGoList = enabled
 	}
-=======
+}
+
 func (parser *Parser) Packages() *PackagesDefinitions {
 	return parser.packages
->>>>>>> v1.8.1_3
 }
 
 // ParseAPI parses general api info for given searchDir and mainAPIFile.
@@ -782,8 +781,6 @@ func isExistsScope(scope string) (bool, error) {
 	return strings.Contains(scope, scopeAttrPrefix), nil
 }
 
-<<<<<<< HEAD
-=======
 // getSchemes parses swagger schemes for given commentLine.
 func getSchemes(commentLine string) []string {
 	attribute := strings.ToLower(strings.Split(commentLine, " ")[0])
@@ -801,7 +798,6 @@ func astNodeToString(typ ast.Node) string {
 	return buf.String()
 }
 
->>>>>>> v1.8.1_3
 // ParseRouterAPIInfo parses router api info for given astFile.
 func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) error {
 	for _, astDescription := range astFile.Decls {
@@ -819,12 +815,6 @@ func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) err
 			}
 		}
 
-<<<<<<< HEAD
-			err := processRouterOperation(parser, operation)
-			if err != nil {
-				return err
-			}
-=======
 		genDeclaration, ok := astDescription.(*ast.GenDecl)
 		if ok && genDeclaration.Tok == token.TYPE {
 			for _, spec := range genDeclaration.Specs {
@@ -872,7 +862,6 @@ func (parser *Parser) ParseRouterAPIFuncInfo(fileName string, astFile *ast.File,
 		err := operation.ParseComment(comment.Text, astFile)
 		if err != nil {
 			return fmt.Errorf("ParseComment error in file %s :%+v", fileName, err)
->>>>>>> v1.8.1_3
 		}
 	}
 
@@ -880,29 +869,9 @@ func (parser *Parser) ParseRouterAPIFuncInfo(fileName string, astFile *ast.File,
 		operation.ID = defaultID
 	}
 
-	for _, routeProperties := range operation.RouterProperties {
-		var pathItem spec.PathItem
-		var ok bool
-
-		pathItem, ok = parser.swagger.Paths.Paths[routeProperties.Path]
-		if !ok {
-			pathItem = spec.PathItem{}
-		}
-
-		op := refRouteMethodOp(&pathItem, routeProperties.HTTPMethod)
-
-		// check if we already have a operation for this path and method
-		if *op != nil {
-			err := fmt.Errorf("route %s %s is declared multiple times", routeProperties.HTTPMethod, routeProperties.Path)
-			if parser.Strict {
-				return err
-			}
-			parser.debug.Printf("warning: %s\n", err)
-		}
-
-		*op = &operation.Operation
-
-		parser.swagger.Paths.Paths[routeProperties.Path] = pathItem
+	err := processRouterOperation(parser, operation)
+	if err != nil {
+		return err
 	}
 	return nil
 }

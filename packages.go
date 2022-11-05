@@ -30,15 +30,9 @@ func NewPackagesDefinitions() *PackagesDefinitions {
 }
 
 // CollectAstFile collect ast.file.
-<<<<<<< HEAD
-func (pkgDefs *PackagesDefinitions) CollectAstFile(packageDir, path string, astFile *ast.File) error {
+func (pkgDefs *PackagesDefinitions) CollectAstFile(packageDir, filename string, astFile *ast.File) error {
 	if pkgDefs.files == nil {
 		pkgDefs.files = make(map[*ast.File]*AstFileInfo)
-=======
-func (pkgs *PackagesDefinitions) CollectAstFile(packageDir, filename string, astFile *ast.File) error {
-	if pkgs.files == nil {
-		pkgs.files = make(map[*ast.File]*AstFileInfo)
->>>>>>> v1.8.1_3
 	}
 
 	if pkgDefs.packages == nil {
@@ -58,32 +52,20 @@ func (pkgs *PackagesDefinitions) CollectAstFile(packageDir, filename string, ast
 	dependency, ok := pkgDefs.packages[packageDir]
 	if ok {
 		// return without storing the file if it already exists
-<<<<<<< HEAD
-		_, exists := dependency.Files[path]
-		if exists {
-			return nil
-		}
-
-		dependency.Files[path] = astFile
-	} else {
-		pkgDefs.packages[packageDir] = &PackageDefinitions{
-			Name:            astFile.Name.Name,
-			Files:           map[string]*ast.File{path: astFile},
-			TypeDefinitions: make(map[string]*TypeSpecDef),
-=======
-		exists := pd.findFile(filename)
+		exists := dependency.findFile(filename)
 		if exists != nil {
 			return nil
 		}
-		pd.mustAdd(filename, astFile)
+		dependency.mustAdd(filename, astFile)
 	} else {
-		pd, err = newPackageDefinitions(astFile.Name.Name, packageDir, filepath.Dir(filename))
+		dependency, err = newPackageDefinitions(astFile.Name.Name, 
+			packageDir, 
+			filepath.Dir(filename))
 		if err != nil {
 			return err
->>>>>>> v1.8.1_3
 		}
-		pkgs.packages[packageDir] = pd
-		pd.mustAdd(filename, astFile)
+		pkgDefs.packages[packageDir] = dependency
+		dependency.mustAdd(filename, astFile)
 	}
 
 	pkgDefs.files[astFile] = &AstFileInfo{
@@ -125,22 +107,13 @@ func rangeFiles(files map[*ast.File]*AstFileInfo, handle func(filename string, f
 // @Return parsed definitions.
 func (pkgDefs *PackagesDefinitions) ParseTypes() (map[*TypeSpecDef]*Schema, error) {
 	parsedSchemas := make(map[*TypeSpecDef]*Schema)
-<<<<<<< HEAD
 	for astFile, info := range pkgDefs.files {
-		pkgDefs.parseTypesFromFile(astFile, info.PackagePath, parsedSchemas)
-=======
-	for astFile, info := range pkgs.files {
-		pkgs.parseTypesFromFile(astFile, info.PackagePath, info.Path, parsedSchemas)
->>>>>>> v1.8.1_3
+		pkgDefs.parseTypesFromFile(astFile, info.PackagePath, info.Path, parsedSchemas)
 	}
 	return parsedSchemas, nil
 }
 
-<<<<<<< HEAD
-func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePath string, parsedSchemas map[*TypeSpecDef]*Schema) {
-=======
-func (pkgs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePath, filename string, parsedSchemas map[*TypeSpecDef]*Schema) {
->>>>>>> v1.8.1_3
+func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePath, filename string, parsedSchemas map[*TypeSpecDef]*Schema) {
 	for _, astDeclaration := range astFile.Decls {
 		if generalDeclaration, ok := astDeclaration.(*ast.GenDecl); ok && generalDeclaration.Tok == token.TYPE {
 			for _, astSpec := range generalDeclaration.Specs {
@@ -176,17 +149,7 @@ func (pkgs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePa
 						pkgDefs.uniqueDefinitions[fullName] = typeSpecDef
 					}
 
-<<<<<<< HEAD
 					if pkgDefs.packages[typeSpecDef.PkgPath] == nil {
-						pkgDefs.packages[typeSpecDef.PkgPath] = &PackageDefinitions{
-							Name:            astFile.Name.Name,
-							TypeDefinitions: map[string]*TypeSpecDef{typeSpecDef.Name(): typeSpecDef},
-						}
-					} else if _, ok = pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()]; !ok {
-						pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
-=======
-
-					if pkgs.packages[typeSpecDef.PkgPath] == nil {
 						pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, filepath.Dir(filename))
 						if err != nil {
 							panic(err)
@@ -195,10 +158,9 @@ func (pkgs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePa
 							pd.mustAdd(filename, astFile)
 						}
 						pd.TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
-						pkgs.packages[typeSpecDef.PkgPath] = pd
-					} else if _, ok = pkgs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()]; !ok {
-						pkgs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
->>>>>>> v1.8.1_3
+						pkgDefs.packages[typeSpecDef.PkgPath] = pd
+					} else if _, ok = pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()]; !ok {
+						pkgDefs.packages[typeSpecDef.PkgPath].TypeDefinitions[typeSpecDef.Name()] = typeSpecDef
 					}
 				}
 			}
@@ -229,9 +191,9 @@ func (pkgDefs *PackagesDefinitions) findTypeSpec(pkgPath string, typeName string
 					Path:        filepath.Join(pd.Dir, pd.filenames[idx]),
 					PackagePath: pkgPath,
 				}
-				pkgs.files[file] = astFile
+				pkgDefs.files[file] = astFile
 
-				pkgs.parseTypesFromFile(file, astFile.PackagePath, "", nil)
+				pkgDefs.parseTypesFromFile(file, astFile.PackagePath, "", nil)
 			}
 		}
 
