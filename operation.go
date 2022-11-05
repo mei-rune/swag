@@ -319,7 +319,7 @@ func (operation *Operation) ParseParamComment(commentLine string, astFile *ast.F
 				return err
 			}
 		case OBJECT:
-			err := operation.parseAndExtractionParamAttribute(commentLine, objectType, refType, &param)
+			err := operation.parseParamAttribute(commentLine, objectType, refType, &param)
 			if err != nil {
 				return err
 			}
