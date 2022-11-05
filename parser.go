@@ -1108,6 +1108,7 @@ func (parser *Parser) ParseDefinition(typeSpecDef *TypeSpecDef) (*Schema, error)
 	}
 
 	if parser.isInStructStack(typeSpecDef) {
+		panic("")
 		parser.debug.Printf("Skipping '%s', recursion detected.", typeName)
 
 		return &Schema{
@@ -1122,7 +1123,7 @@ func (parser *Parser) ParseDefinition(typeSpecDef *TypeSpecDef) (*Schema, error)
 
 	parser.debug.Printf("Generating %s", typeName)
 
-	definition, err := parser.parseTypeExpr(typeSpecDef.File, typeSpecDef.TypeSpec.Type, false)
+	definition, err := parser.parseTypeExpr(typeSpecDef.File, typeSpecDef.TypeSpec.Name.Name, typeSpecDef.TypeSpec.Type, false)
 	if err != nil {
 		return nil, err
 	}
@@ -1218,7 +1219,7 @@ func extractDeclarationDescription(commentGroups ...*ast.CommentGroup) string {
 
 // parseTypeExpr parses given type expression that corresponds to the type under
 // given name and package, and returns swagger schema for it.
-func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool) (*spec.Schema, error) {
+func (parser *Parser) parseTypeExpr(file *ast.File, typeName string, typeExpr ast.Expr, ref bool) (*spec.Schema, error) {
 	switch expr := typeExpr.(type) {
 	// type Foo interface{}
 	case *ast.InterfaceType:
@@ -1226,7 +1227,7 @@ func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool)
 
 	// type Foo struct {...}
 	case *ast.StructType:
-		return parser.parseStruct(file, expr.Fields)
+		return parser.parseStruct(file, typeName, expr.Fields)
 
 	// type Foo Baz
 	case *ast.Ident:
@@ -1237,7 +1238,7 @@ func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool)
 
 	// type Foo *Baz
 	case *ast.StarExpr:
-		return parser.parseTypeExpr(file, expr.X, ref)
+		return parser.parseTypeExpr(file, typeName, expr.X, ref)
 
 	// type Foo pkg.Bar
 	case *ast.SelectorExpr:
@@ -1246,7 +1247,7 @@ func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool)
 		}
 	// type Foo []Baz
 	case *ast.ArrayType:
-		itemSchema, err := parser.parseTypeExpr(file, expr.Elt, true)
+		itemSchema, err := parser.parseTypeExpr(file, typeName, expr.Elt, true)
 		if err != nil {
 			return nil, err
 		}
@@ -1257,7 +1258,7 @@ func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool)
 		if _, ok := expr.Value.(*ast.InterfaceType); ok {
 			return spec.MapProperty(nil), nil
 		}
-		schema, err := parser.parseTypeExpr(file, expr.Value, true)
+		schema, err := parser.parseTypeExpr(file, typeName, expr.Value, true)
 		if err != nil {
 			return nil, err
 		}
@@ -1272,7 +1273,7 @@ func (parser *Parser) parseTypeExpr(file *ast.File, typeExpr ast.Expr, ref bool)
 	return parser.parseGenericTypeExpr(file, typeExpr)
 }
 
-func (parser *Parser) parseStruct(file *ast.File, fields *ast.FieldList) (*spec.Schema, error) {
+func (parser *Parser) parseStruct(file *ast.File, typeName string,  fields *ast.FieldList) (*spec.Schema, error) {
 	required, properties := make([]string, 0), make(map[string]spec.Schema)
 
 	for _, field := range fields.List {
@@ -1294,6 +1295,12 @@ func (parser *Parser) parseStruct(file *ast.File, fields *ast.FieldList) (*spec.
 			continue
 		}
 		for idx := range field.Names {
+			fieldTypeName := strings.TrimPrefix(astNodeToString(field.Type), "*")
+			fieldTypeName = strings.TrimPrefix(fieldTypeName, "[]")
+			if typeName == fieldTypeName {
+				continue
+			}
+			// fmt.Println(typeName,  astNodeToString(field.Type))
 			singlefield := *field
 			singlefield.Names = singlefield.Names[idx:idx+1]
 			fieldProps, requiredFromAnon, err := parser.parseStructSingleField(file, &singlefield)
@@ -1393,7 +1400,7 @@ func (parser *Parser) parseStructSingleField(file *ast.File, field *ast.Field) (
 			schema, err = parser.getTypeSchema(typeName, file, true)
 		} else {
 			// unnamed type
-			schema, err = parser.parseTypeExpr(file, field.Type, false)
+			schema, err = parser.parseTypeExpr(file, typeName, field.Type, false)
 		}
 
 		if err != nil {
