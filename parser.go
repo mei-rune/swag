@@ -1007,7 +1007,6 @@ func (parser *Parser) ParseDefinition(typeSpecDef *TypeSpecDef) (*Schema, error)
 	}
 
 	if parser.isInStructStack(typeSpecDef) {
-		panic("")
 		parser.debug.Printf("Skipping '%s', recursion detected.", typeName)
 
 		return &Schema{
@@ -1184,12 +1183,11 @@ func (parser *Parser) parseStruct(file *ast.File, typeName string, fields *ast.F
 			continue
 		}
 		for idx := range field.Names {
-			fieldTypeName := strings.TrimPrefix(astNodeToString(field.Type), "*")
-			fieldTypeName = strings.TrimPrefix(fieldTypeName, "[]")
+			fieldTypeName := strings.TrimPrefix(astNodeToString(field.Type), "[]")
+			fieldTypeName = strings.TrimPrefix(fieldTypeName, "*")
 			if typeName == fieldTypeName {
 				continue
 			}
-			// fmt.Println(typeName,  astNodeToString(field.Type))
 			singlefield := *field
 			singlefield.Names = singlefield.Names[idx:idx+1]
 			fieldProps, requiredFromAnon, err := parser.parseStructSingleField(file, &singlefield)
