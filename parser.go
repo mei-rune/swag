@@ -802,6 +802,8 @@ func astNodeToString(typ ast.Node) string {
 
 // ParseRouterAPIInfo parses router api info for given astFile.
 func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) error {
+	var ns = astNodeToString(astFile.Name)
+
 	for _, astDescription := range astFile.Decls {
 		astDeclaration, ok := astDescription.(*ast.FuncDecl)
 		if ok && astDeclaration.Doc != nil && astDeclaration.Doc.List != nil {
@@ -841,7 +843,7 @@ func (parser *Parser) ParseRouterAPIInfo(fileName string, astFile *ast.File) err
 					}
 
 					if field.Doc != nil && field.Doc.List != nil {
-						id := ts.Name.Name + "." + field.Names[0].Name
+						id := ns + "." + ts.Name.Name + "." + field.Names[0].Name
 						err := parser.ParseRouterAPIFuncInfo(fileName, astFile, id, field.Doc)
 						if err != nil {
 							return err
