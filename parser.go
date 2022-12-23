@@ -1296,8 +1296,8 @@ func (parser *Parser) parseStruct(file *ast.File, typeName string,  fields *ast.
 			continue
 		}
 		for idx := range field.Names {
-			fieldTypeName := strings.TrimPrefix(fieldTypeName, "[]")
-			fieldTypeName = strings.TrimPrefix(astNodeToString(field.Type), "*")
+			fieldTypeName := strings.TrimPrefix(astNodeToString(field.Type), "[]")
+			fieldTypeName = strings.TrimPrefix(fieldTypeName, "*")
 			if typeName == fieldTypeName {
 				continue
 			}
