@@ -1,6 +1,7 @@
 package swag
 
 import (
+	"fmt"
 	"go/ast"
 	goparser "go/parser"
 	"go/token"
@@ -150,8 +151,17 @@ func (pkgDefs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packag
 						pkgDefs.uniqueDefinitions[fullName] = typeSpecDef
 					}
 
+<<<<<<< Updated upstream
 					if pkgDefs.packages[typeSpecDef.PkgPath] == nil {
 						pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, filepath.Dir(filename))
+=======
+					if pkgs.packages[typeSpecDef.PkgPath] == nil {
+						dir := filepath.Dir(filename)
+						if filename == "" {
+							dir = ""
+						}
+						pd, err := newPackageDefinitions(astFile.Name.Name, typeSpecDef.PkgPath, dir)
+>>>>>>> Stashed changes
 						if err != nil {
 							panic(err)
 						}
@@ -278,9 +288,9 @@ func (pkgDefs *PackagesDefinitions) loadExternalPackage(importPath string) error
 	}
 
 	conf := loader.Config{
-		ParserMode: goparser.ParseComments,
+		ParserMode:  goparser.ParseComments,
 		AllowErrors: true,
-		Cwd:        cwd,
+		Cwd:         cwd,
 	}
 
 	conf.Import(importPath)
@@ -414,19 +424,43 @@ func (pkgDefs *PackagesDefinitions) FindTypeSpec(typeName string, file *ast.File
 				pkgPath = pkgDefs.files[file].PackagePath
 			} else if parseDependency {
 				// take it as an external package, needs to be loaded
+<<<<<<< Updated upstream
 				if pkgPath = pkgDefs.findPackagePathFromImports(parts[0], file, true); len(pkgPath) > 0 {
 					if err := pkgDefs.loadExternalPackage(pkgPath); err != nil {
+=======
+				if pkgPath = pkgs.findPackagePathFromImports(parts[0], file, true); len(pkgPath) > 0 {
+					if err := pkgs.loadExternalPackage(pkgPath); err != nil {
+						fmt.Println("FindTypeSpec.loadExternalPackage", err)
+>>>>>>> Stashed changes
 						return nil
 					}
 				}
 			}
 		}
 
+<<<<<<< Updated upstream
 		if def := pkgDefs.findGenericTypeSpec(typeName, file, parseDependency); def != nil {
 			return def
 		}
 
 		return pkgDefs.findTypeSpec(pkgPath, parts[1])
+=======
+		tresult := pkgs.findTypeSpec(pkgPath, parts[1])
+		if tresult != nil {
+			return tresult
+		}
+
+		if parseDependency {
+			// take it as an external package, needs to be loaded
+			if pkgPath = pkgs.findPackagePathFromImports(parts[0], file, true); len(pkgPath) > 0 {
+				if err := pkgs.loadExternalPackage(pkgPath); err != nil {
+					fmt.Println("FindTypeSpec.loadExternalPackage", err)
+					return nil
+				}
+			}
+		}
+		return pkgs.findTypeSpec(pkgPath, parts[1])
+>>>>>>> Stashed changes
 	}
 
 	if def := pkgDefs.findGenericTypeSpec(fullTypeName(file.Name.Name, typeName), file, parseDependency); def != nil {
