@@ -140,7 +140,6 @@ func (pkgs *PackagesDefinitions) parseTypesFromFile(astFile *ast.File, packagePa
 						pkgs.uniqueDefinitions[fullName] = typeSpecDef
 					}
 
-
 					if pkgs.packages[typeSpecDef.PkgPath] == nil {
 						dir := filepath.Dir(filename)
 						if filename == "" {
@@ -209,9 +208,9 @@ func (pkgs *PackagesDefinitions) loadExternalPackage(importPath string) error {
 	}
 
 	conf := loader.Config{
-		ParserMode: goparser.ParseComments,
+		ParserMode:  goparser.ParseComments,
 		AllowErrors: true,
-		Cwd:        cwd,
+		Cwd:         cwd,
 	}
 
 	conf.Import(importPath)
@@ -347,6 +346,15 @@ func (pkgs *PackagesDefinitions) FindTypeSpec(typeName string, file *ast.File, p
 			}
 		}
 
+		typeDef := pkgs.findTypeSpec(pkgPath, parts[1])
+		if typeDef != nil {
+			return typeDef
+		}
+		if pkgPath = pkgs.findPackagePathFromImports(parts[0], file, true); len(pkgPath) > 0 {
+			if err := pkgs.loadExternalPackage(pkgPath); err != nil {
+				return nil
+			}
+		}
 		return pkgs.findTypeSpec(pkgPath, parts[1])
 	}
 
