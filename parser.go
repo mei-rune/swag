@@ -907,7 +907,7 @@ func (parser *Parser) getTypeSchema(typeName string, file *ast.File, ref bool) (
 		if err != nil {
 			if err == ErrRecursiveParseStruct && ref {
 				if schema == nil {
-					fmt.Println(*typeSpecDef)
+					fmt.Println(*typeSpecDef, typeSpecDef.FullPath(), typeSpecDef.FullName())
 				}
 				return parser.getRefTypeSchema(typeSpecDef, schema), nil
 			}
