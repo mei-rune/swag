@@ -230,6 +230,12 @@ func (pkgDefs *PackagesDefinitions) loadExternalPackage(importPath string) error
 	for _, info := range loaderProgram.AllPackages {
 		pkgPath := strings.TrimPrefix(info.Pkg.Path(), "vendor/")
 		for _, astFile := range info.Files {
+			pkgDefs.files[astFile] = &AstFileInfo{
+				File:        astFile,
+				Path:        "",
+				PackagePath: pkgPath,
+			}
+
 			pkgDefs.parseTypesFromFile(astFile, pkgPath, "", nil)
 		}
 	}
