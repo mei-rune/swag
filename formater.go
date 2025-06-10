@@ -95,10 +95,13 @@ func (f *Formater) visit(path string, fileInfo os.FileInfo, err error) error {
 		return nil
 	}
 
-	if strings.HasSuffix(strings.ToLower(path), "_test.go") || filepath.Ext(path) != ".go" {
+	if strings.HasSuffix(strings.ToLower(path), "_test.go") ||
+		strings.HasSuffix(strings.ToLower(path), "-gen.go") ||
+		filepath.Ext(strings.ToLower(path)) != ".go" {
 		// skip if file not has suffix "*.go"
 		return nil
 	}
+
 	if strings.HasSuffix(strings.ToLower(path), f.mainFile) {
 		// skip main file
 		return nil
@@ -106,6 +109,12 @@ func (f *Formater) visit(path string, fileInfo os.FileInfo, err error) error {
 
 	err = f.FormatFile(path)
 	if err != nil {
+
+		if matchGoVersionFilename(strings.ToLower(path)) ||
+			hasGoBuildDirective(path){
+			return nil
+		}
+
 		return fmt.Errorf("ParseFile error:%+v", err)
 	}
 	return nil

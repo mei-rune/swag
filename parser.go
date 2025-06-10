@@ -20,6 +20,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"regexp"
+	"bufio"
 
 	"github.com/KyleBanks/depth"
 	"github.com/go-openapi/spec"
@@ -1513,7 +1515,11 @@ func (parser *Parser) parseFile(packageDir, path string, src interface{}) error 
 	// positions are relative to FileSet
 	astFile, err := goparser.ParseFile(token.NewFileSet(), path, src, goparser.ParseComments)
 	if err != nil {
-		return fmt.Errorf("ParseFile error:%+v", err)
+		if matchGoVersionFilename(strings.ToLower(path)) ||
+		hasGoBuildDirective(path) {
+			return nil
+		}
+		return fmt.Errorf("ParseFile error111:%+v", err, path)
 	}
 
 	err = parser.packages.CollectAstFile(packageDir, path, astFile)
@@ -1522,6 +1528,30 @@ func (parser *Parser) parseFile(packageDir, path string, src interface{}) error 
 	}
 
 	return nil
+}
+
+func matchGoVersionFilename(filename string) bool {
+    re := regexp.MustCompile(`^.*_go\d+\.go$`) 
+    return re.MatchString(filename)
+}
+
+// hasGoBuildDirective 检查文件中是否包含 //go:build 开头的行
+// 返回：存在返回true，不存在或出错返回false
+func hasGoBuildDirective(filename string) bool {
+    file, err := os.Open(filename)
+    if err != nil {
+        return false
+    }
+    defer file.Close()
+
+    scanner := bufio.NewScanner(file)
+    for scanner.Scan() {
+        line := strings.TrimSpace(scanner.Text())
+        if strings.HasPrefix(line, "//go:build") {
+            return true
+        }
+    }
+    return false
 }
 
 func (parser *Parser) checkOperationIDUniqueness() error {
