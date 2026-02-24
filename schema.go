@@ -157,6 +157,9 @@ func RefSchema(refType string) *spec.Schema {
 }
 
 func GetRefTypeFromRefSchema(schema *spec.Schema) string {
+	if schema.Ref.GetURL() == nil {
+		return ""
+	}
 	return strings.TrimPrefix(schema.Ref.GetURL().String(), "#/definitions/")
 }
 
